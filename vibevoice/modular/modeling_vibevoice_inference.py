@@ -285,7 +285,7 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
         self._prepare_special_tokens(generation_config, True, device=device)
         generation_config.use_cache = True
         model_kwargs["use_cache"] = generation_config.use_cache
-        input_ids = inputs_tensor.to(self.device)
+        input_ids = inputs_tensor.to(device)
 
         input_ids_length = input_ids.shape[1]
         has_default_max_length = kwargs.get("max_length") is None and generation_config.max_length is not None
@@ -300,7 +300,10 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
         )
 
         max_cache_length = generation_config.max_length - 1
-        self._prepare_cache_for_generation(generation_config, model_kwargs, None, batch_size, max_cache_length, device)
+        self.config.num_hidden_layers = self.config.decoder_config.num_hidden_layers
+        self.config.hidden_size = self.config.decoder_config.hidden_size
+        self.config.vocab_size = self.config.decoder_config.vocab_size
+        self._prepare_cache_for_generation(generation_config, model_kwargs, None, batch_size, max_cache_length)
         model_kwargs['cache_position'] = torch.arange(input_ids_length, device=device, dtype=torch.long)
         for k, v in model_kwargs.items():
             if isinstance(v, torch.Tensor):
@@ -553,8 +556,7 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                     negative_model_kwargs['attention_mask'][sample_idx, :] = 0
                     negative_model_kwargs['attention_mask'][sample_idx, -1] = 1
                 # update past key values
-                for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                        negative_model_kwargs['past_key_values'].value_cache)):
+                for layer_idx, (k_cache, v_cache) in enumerate(negative_model_kwargs["past_key_values"]):
                     # Process each non-diffusion sample
                     for sample_idx in diffusion_start_indices.tolist():
                         # Shift cache for this sample
@@ -606,8 +608,7 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                         negative_model_kwargs['attention_mask'][sample_idx, start_idx] = 0
 
                     # 2. Update past_key_values
-                    for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                        negative_model_kwargs['past_key_values'].value_cache)):
+                    for layer_idx, (k_cache, v_cache) in enumerate(negative_model_kwargs["past_key_values"]):
                         # Process each non-diffusion sample
                         for sample_idx, start_idx in zip(non_diffusion_indices.tolist(), start_indices.tolist()):
                             if start_idx + 1 < k_cache.shape[2] - 1:
